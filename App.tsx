@@ -1,115 +1,100 @@
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
-import {
-  KeyboardAvoidingView,
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  Platform,
-  Keyboard,
-} from "react-native";
-import Task from "./components/Task";
+import React, { createContext, useState, useContext, useEffect } from "react";
+import { StyleSheet, Text, View, ActivityIndicator } from "react-native";
+import { NavigationContainer } from "@react-navigation/native";
+import { createStackNavigator } from "@react-navigation/stack";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth } from "./config/firebase";
+import firebase from 'firebase/compat/app';
 
-export default function App() {
-  const [task, setTask] = useState<string>();
-  const [taskItems, setTaskItems] = useState([]);
+import Chat from "./components/Chat";
+import Login from "./components/Login";
+import Register from "./components/Register";
+import Home from "./components/Home";
 
+const Stack = createStackNavigator();
 
-  
-
-  const handleAddTask = () => {
-    Keyboard.dismiss();
-    setTaskItems([...taskItems, task]);
-    setTask("")
-  };
-
-  const completeTask = (index) => {
-    let itemsCopy = [...taskItems];
-    itemsCopy.splice(index, 1);
-    setTaskItems(itemsCopy);
-  };
+type AuthenticatedUserContextType = {
+  authenticatedUser: User | null;
+  setAuthenticatedUser: React.Dispatch<React.SetStateAction<User | null>>;
+}
+const AuthenticatedUserContext = createContext<AuthenticatedUserContextType>({} as AuthenticatedUserContextType);
 
 
 
+
+function AuthenticatedUserProvider({ children }) {
+  const [authenticatedUser, setAuthenticatedUser] = useState<User | null>(null);
   return (
-    <View style={styles.container}>
-      <View style={styles.tasksWrapper}>
-        <Text style={styles.sectionTitle}>Todos</Text>
-        <View style={styles.items}>
-          {
-            taskItems.map((item, index) => {
-              return (
-                <TouchableOpacity key={index} onPress={() => completeTask(index)}>
-                  <Task text={item} />
-                </TouchableOpacity>
-              )
-            })
-          }
-        </View>
-      </View>
+    <AuthenticatedUserContext.Provider value={{ authenticatedUser, setAuthenticatedUser }}>
+      {children}
+    </AuthenticatedUserContext.Provider>
+  );
+  
+}
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.writeTaskWrapper}
-      >
-      <TextInput style={styles.input} placeholder={'Write a task'} value={task} onChangeText={text => setTask(text)} />
-        <TouchableOpacity onPress={() => handleAddTask()}>
-          <View style={styles.addWrapper}>
-            <Text style={styles.addText}>+</Text>
-          </View>
-        </TouchableOpacity>
-      </KeyboardAvoidingView>
-    </View>
+
+function ChatStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen name="Home" component={Home} />
+      <Stack.Screen name="Chat" component={Chat} /> 
+    </Stack.Navigator>
   );
 }
 
+function AuthStack() {
+  return (
+    <Stack.Navigator screenOptions={{headerShown: false}}>
+      <Stack.Screen name="Login" component={Login} />
+      <Stack.Screen name="Register" component={Register} />
+    </Stack.Navigator>
+  );
+}
+
+function RootNavigator() {
+  const { authenticatedUser, setAuthenticatedUser}= useContext(AuthenticatedUserContext);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth,
+      async authenticatedUser => {
+        try {
+          authenticatedUser ? setAuthenticatedUser(authenticatedUser) : setAuthenticatedUser(null);
+        } catch (error) {
+          console.log(error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    );
+    return () => unsubscribe();
+  }, [authenticatedUser]);
+
+  if (loading) {
+    return(
+      <View style={{flex: 1, justifyContent: "center", alignItems: "center"}}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
+  }
+
+  return (
+    <NavigationContainer>
+      {authenticatedUser ? <ChatStack /> : <AuthStack />}
+    </NavigationContainer>
+  );
+}
+
+export default function App() {
+
+  return (
+    <AuthenticatedUserProvider>
+      <RootNavigator />
+      </AuthenticatedUserProvider>
+      );
+    }
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  tasksWrapper: {
-    paddingTop: 80,
-    paddingHorizontal: 20,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  items: {
-    marginTop: 30,
-  },
-  writeTaskWrapper: {
-    position: "absolute",
-    bottom: 60,
-    width: "100%",
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-  },
-  input: {
-    paddingVertical: 15,
-    paddingHorizontal: 15,
-    backgroundColor: "#FFF",
-    borderRadius: 60,
-    borderColor: "#C0C0C0",
-    borderWidth: 1,
-    width: 250,
-  },
-  addWrapper: {
-    width: 60,
-    height: 60,
-    backgroundColor: "#FFF",
-    borderRadius: 60,
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    borderColor: "#C0C0C0",
-    borderWidth: 1,
-  },
-  addText: {
-    fontSize: 24,
-  },
+  
 });
